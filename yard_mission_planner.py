@@ -85,6 +85,7 @@ def load_config(path: Path) -> dict:
             "side_overlap": 0.65,
             "speed_mps": 6.0,
             "heading_deg": "auto",          # "auto" = align to polygon's long axis
+            "edge_buffer_m": 5.0,           # how far outside polygon to extend sweep grid
         },
         "orbit": {
             "altitude_m": 24.0,             # 80 ft
@@ -410,11 +411,7 @@ def main() -> None:
     target_gsd = nadir_cfg["target_gsd_cm_per_px"]
     nadir_altitude = altitude_for_gsd(target_gsd)
     fp_w, fp_h = ground_footprint_m(nadir_altitude)
-    # Edge buffer: small fixed value. Larger buffer = more coverage redundancy at
-    # the polygon edge but also more flying outside your property. 5m is plenty
-    # for a small yard; the orthomosaic gracefully degrades right at the edge but
-    # everything inside the polygon is well-covered.
-    nadir_buffer = 5.0
+    nadir_buffer = float(nadir_cfg["edge_buffer_m"])
 
     if nadir_cfg["heading_deg"] == "auto":
         nadir_heading = auto_heading_deg(yard_local)

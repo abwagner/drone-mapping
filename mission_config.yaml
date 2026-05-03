@@ -30,6 +30,15 @@ nadir:
   #   90      -> E-W flight lines
   heading_deg: auto
 
+  # How far OUTSIDE the polygon to extend the sweep grid, in meters.
+  # Tradeoff: larger buffer = better edge coverage in the orthomosaic (the property
+  # line gets photographed by full camera footprints, not half-footprints) at the
+  # cost of flying further over neighbors' yards.
+  #   0     -> drone stays strictly inside polygon; ortho edges will degrade
+  #   1-2   -> partial edge coverage, minimal overflight
+  #   5     -> ~one full footprint of overshoot at typical altitudes (default)
+  edge_buffer_m: 1.0
+
 orbit:
   # Orbit altitude (m). 24m = 80ft. Lower = better tree-ID detail, but watch trees.
   altitude_m: 24.0
