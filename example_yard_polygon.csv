@@ -1,0 +1,18 @@
+# Yard polygon vertices, one per row, in order around the perimeter.
+# Format: latitude,longitude  (decimal degrees, WGS84)
+#
+# To get coordinates: open Google Maps satellite view, right-click each
+# corner of your yard, and click the lat/lon that appears at the top of
+# the menu (it copies to clipboard). Walk around the perimeter in one
+# direction (clockwise or counter-clockwise -- both work) and paste
+# each pair below.
+#
+# This example is a 6-sided L-shape (placeholder coords near Graceland, Memphis, TN).
+# Replace with your actual yard corners.
+lat,lon
+35.04600, -90.02260
+35.04600, -90.02200
+35.04640, -90.02200
+35.04640, -90.02230
+35.04660, -90.02230
+35.04660, -90.02260

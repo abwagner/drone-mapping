@@ -1,0 +1,51 @@
+# Mission planner config for DJI Mavic Air 2.
+# Anything you omit falls back to the default in the script.
+
+nadir:
+  # target_gsd_cm_per_px: ground resolution per pixel. Determines altitude.
+  # For SMALL YARDS (under 1 acre), use smaller GSD values -- this gives a
+  # narrower camera footprint, more flight lines, and better photo redundancy
+  # for photogrammetry. ODM needs each ground point visible in 5+ photos.
+  #   1.0 -> 28m altitude, 7+ flight lines, ~80 photos for 3/4 acre, 4 min
+  #   1.2 -> 34m altitude, 5-6 lines, ~50 photos, 3 min   <-- balanced for 3/4 ac
+  #   1.8 -> 51m altitude, 3 lines (TOO FEW for small yards)
+  # For larger properties (>2 acres), 1.5-2.5 is fine since you'll get
+  # plenty of lines anyway.
+  target_gsd_cm_per_px: 1.2
+
+  # Overlap between adjacent photos. Higher = more redundancy = better photogrammetry,
+  # at cost of more photos and longer flights.
+  #   75/65: standard photogrammetry default (good for most yards)
+  #   80/70: bump up if you have lots of trees, water, or uniform grass (ODM struggles
+  #          with low-feature areas; more overlap helps)
+  front_overlap: 0.75    # along flight line
+  side_overlap: 0.65     # between parallel lines
+
+  # Flight speed (m/s). 6 m/s = ~13 mph. Faster = motion blur risk.
+  speed_mps: 6.0
+
+  # Heading of flight lines, degrees clockwise from north.
+  #   "auto"  -> aligned with polygon's long axis (minimizes turns/battery use)
+  #   0       -> N-S flight lines
+  #   90      -> E-W flight lines
+  heading_deg: auto
+
+orbit:
+  # Orbit altitude (m). 24m = 80ft. Lower = better tree-ID detail, but watch trees.
+  altitude_m: 24.0
+
+  # How far INSIDE the polygon to fly the orbit, in meters.
+  # 5m keeps you over your own property even if your polygon is slightly off.
+  inset_m: 5.0
+
+  # Distance between photo waypoints along the orbit. Smaller = more photos.
+  photo_spacing_m: 4.0
+
+  # Gimbal pitch: -45 = looking down at 45°. -30 is more horizontal (better for
+  # tree trunks), -60 is more downward.
+  gimbal_pitch_deg: -45.0
+
+  speed_mps: 3.0
+
+# Where to write the generated mission files
+output_dir: ./mission_output
