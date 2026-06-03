@@ -41,7 +41,7 @@ nadir:
 
 orbit:
   # Orbit altitude (m). 24m = 80ft. Lower = better tree-ID detail, but watch trees.
-  altitude_m: 24.0
+  altitude_m: 34.0
 
   # How far INSIDE the polygon to fly the orbit, in meters.
   # 5m keeps you over your own property even if your polygon is slightly off.
@@ -52,7 +52,7 @@ orbit:
 
   # Gimbal pitch: -45 = looking down at 45°. -30 is more horizontal (better for
   # tree trunks), -60 is more downward.
-  gimbal_pitch_deg: -45.0
+  gimbal_pitch_deg: -58.0
 
   speed_mps: 3.0
 
