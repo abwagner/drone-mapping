@@ -86,6 +86,7 @@ def load_config(path: Path) -> dict:
             "speed_mps": 6.0,
             "heading_deg": "auto",          # "auto" = align to polygon's long axis
             "edge_buffer_m": 5.0,           # how far outside polygon to extend sweep grid
+            "photo_hover_ms": 2000,         # hover at each wp for N ms before shooting; 0 to disable
         },
         "orbit": {
             "altitude_m": 24.0,             # 80 ft
@@ -93,6 +94,7 @@ def load_config(path: Path) -> dict:
             "photo_spacing_m": 4.0,
             "gimbal_pitch_deg": -45.0,
             "speed_mps": 3.0,
+            "photo_hover_ms": 2000,         # hover at each wp for N ms before shooting; 0 to disable
         },
         "output_dir": "./mission_output",
     }
@@ -298,21 +300,39 @@ def write_litchi_csv(
     waypoints_latlon: list[tuple[float, float, float, float]],
     altitude_m: float,
     speed_mps: float,
+    photo_hover_ms: int = 0,
 ) -> None:
-    """waypoints_latlon: list of (lat, lon, heading_deg, gimbal_pitch_deg)."""
+    """waypoints_latlon: list of (lat, lon, heading_deg, gimbal_pitch_deg).
+
+    photo_hover_ms: if >0, hover at each waypoint for this many ms before shooting.
+    Gives the camera buffer time to clear between shots — avoids dropped photos
+    on slower SD cards or when the camera is still writing the previous frame.
+    """
     with path.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(LITCHI_HEADER)
         for lat, lon, heading, gimbal in waypoints_latlon:
             row = [
                 lat, lon, altitude_m, heading,
-                0.2,    # curvesize: small for sharp corners
+                # curvesize=0 forces a full stop at each waypoint. Non-zero values
+                # let the drone swoop past, which causes photo actions to fire while
+                # moving and frequently get dropped on Mavic Air 2 (per Litchi forum).
+                0.0,
                 0,      # rotationdir
                 2,      # gimbalmode: interpolate
                 gimbal,
-                0, 0,   # actiontype1=take_photo, actionparam1
             ]
-            row.extend([-1, 0] * 14)  # 14 unused action slots
+            if photo_hover_ms > 0:
+                # Hover before AND after the shutter: before lets the gimbal settle,
+                # after lets the camera finish writing the file to SD before the drone
+                # yaws/moves and interrupts the write. Per Litchi forum guidance.
+                row.extend([0, photo_hover_ms])  # stay_for: pre-shutter settle
+                row.extend([1, 0])               # take_photo
+                row.extend([0, photo_hover_ms])  # stay_for: post-shutter SD write
+                row.extend([-1, 0] * 12)
+            else:
+                row.extend([1, 0])               # take_photo only
+                row.extend([-1, 0] * 14)
             row.extend([
                 0,             # altitudemode: above takeoff
                 speed_mps,
@@ -320,6 +340,15 @@ def write_litchi_csv(
                 -1, -1,        # photo intervals (per-wp action handles this)
             ])
             writer.writerow(row)
+
+
+def write_combined_csv(combined_path: Path, *source_paths: Path) -> None:
+    """Concatenate Litchi CSVs in order, keeping a single header from the first."""
+    with combined_path.open("w", newline="") as out:
+        for i, src in enumerate(source_paths):
+            with src.open("r", newline="") as f:
+                lines = f.readlines()
+            out.writelines(lines if i == 0 else lines[1:])
 
 
 # =============================================================================
@@ -448,8 +477,11 @@ def main() -> None:
                        nadir_local[i+1][1] - nadir_local[i][1])
             for i in range(len(nadir_local) - 1)
         )
-        flight_time = path_len / nadir_cfg["speed_mps"] + len(nadir_local) * 1.5
-        print(f"  Path length: {path_len:.0f}m, est. flight time: {flight_time / 60:.1f} min")
+        hover_s = nadir_cfg.get("photo_hover_ms", 0) / 1000.0
+        flight_time = (path_len / nadir_cfg["speed_mps"]
+                       + len(nadir_local) * (1.5 + 2 * hover_s))
+        print(f"  Path length: {path_len:.0f}m, est. flight time: {flight_time / 60:.1f} min"
+              + (f" (incl. 2x {hover_s:.1f}s hover/wp)" if hover_s else ""))
 
     # --- Orbit ---
     orbit_cfg = config["orbit"]
@@ -457,6 +489,18 @@ def main() -> None:
     orbit_local = generate_perimeter_orbit(
         yard_local, orbit_cfg["inset_m"], orbit_cfg["photo_spacing_m"]
     )
+    # Rotate orbit to start at the waypoint closest to nadir's last point so the
+    # combined mission has a minimal transit at the nadir→orbit handoff.
+    if nadir_local and orbit_local:
+        last_n_east, last_n_north = nadir_local[-1]
+        start_idx = min(
+            range(len(orbit_local)),
+            key=lambda i: math.hypot(
+                orbit_local[i][0] - last_n_east,
+                orbit_local[i][1] - last_n_north,
+            ),
+        )
+        orbit_local = orbit_local[start_idx:] + orbit_local[:start_idx]
     orbit_latlon = [
         (lat, lon, heading, orbit_cfg["gimbal_pitch_deg"])
         for east, north, heading in orbit_local
@@ -469,16 +513,23 @@ def main() -> None:
                        orbit_local[(i+1) % len(orbit_local)][1] - orbit_local[i][1])
             for i in range(len(orbit_local))
         )
-        flight_time = path_len / orbit_cfg["speed_mps"] + len(orbit_local) * 1.5
-        print(f"  Path length: {path_len:.0f}m, est. flight time: {flight_time / 60:.1f} min")
+        hover_s = orbit_cfg.get("photo_hover_ms", 0) / 1000.0
+        flight_time = (path_len / orbit_cfg["speed_mps"]
+                       + len(orbit_local) * (1.5 + 2 * hover_s))
+        print(f"  Path length: {path_len:.0f}m, est. flight time: {flight_time / 60:.1f} min"
+              + (f" (incl. 2x {hover_s:.1f}s hover/wp)" if hover_s else ""))
 
     # --- Outputs ---
     nadir_csv = output_dir / "mission_nadir.csv"
     orbit_csv = output_dir / "mission_orbit.csv"
+    combined_csv = output_dir / "mission_combined.csv"
     kml_path = output_dir / "missions_preview.kml"
 
-    write_litchi_csv(nadir_csv, nadir_latlon, nadir_altitude, nadir_cfg["speed_mps"])
-    write_litchi_csv(orbit_csv, orbit_latlon, orbit_cfg["altitude_m"], orbit_cfg["speed_mps"])
+    write_litchi_csv(nadir_csv, nadir_latlon, nadir_altitude, nadir_cfg["speed_mps"],
+                     photo_hover_ms=nadir_cfg.get("photo_hover_ms", 0))
+    write_litchi_csv(orbit_csv, orbit_latlon, orbit_cfg["altitude_m"], orbit_cfg["speed_mps"],
+                     photo_hover_ms=orbit_cfg.get("photo_hover_ms", 0))
+    write_combined_csv(combined_csv, nadir_csv, orbit_csv)
     write_kml(
         kml_path, polygon_latlon,
         [(lat, lon) for lat, lon, _, _ in nadir_latlon],
@@ -489,6 +540,7 @@ def main() -> None:
     print(f"\nWrote:")
     print(f"  {nadir_csv}")
     print(f"  {orbit_csv}")
+    print(f"  {combined_csv}")
     print(f"  {kml_path}")
 
 
